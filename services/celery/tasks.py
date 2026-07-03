@@ -3,6 +3,7 @@ import odoorpc
 import os
 import logging
 
+
 # Configuration
 REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379')
 ODOO_URL = os.getenv('ODOO_URL', 'http://odoo:8069')
@@ -12,6 +13,10 @@ ODOO_PASSWORD = os.getenv('ODOO_PASSWORD', 'admin')
 
 # Initialize Celery
 app = Celery('erp_tasks', broker=REDIS_URL, backend=REDIS_URL)
+app = Celery('tasks', broker='redis://redis:6379/0')
+@app.task
+def dummy_task():
+    return "OK"
 
 # Logging
 logging.basicConfig(level=logging.INFO)
