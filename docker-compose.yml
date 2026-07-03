@@ -1,21 +1,22 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Database
   db:
     image: postgres:15
     container_name: erp-db
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - erp-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Redis untuk queue messaging
   redis:
     image: redis:7-alpine
     container_name: erp-redis
@@ -23,20 +24,21 @@ services:
       - erp-network
     restart: unless-stopped
 
-  # Odoo ERP
   odoo:
     image: odoo:17.0
     container_name: erp-odoo
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     ports:
       - "8069:8069"
     environment:
-      - HOST=db
-      - USER=${POSTGRES_USER}
-      - PASSWORD=${POSTGRES_PASSWORD}
-      - REDIS_HOST=redis
+      HOST: db
+      USER: ${POSTGRES_USER}
+      PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
     volumes:
       - odoo_data:/var/lib/odoo
       - ./config:/etc/odoo
@@ -45,35 +47,32 @@ services:
       - erp-network
     restart: unless-stopped
 
-  # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
     container_name: erp-nginx
     ports:
       - "80:80"
-      - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - odoo
+      - whatsapp-service
     networks:
       - erp-network
     restart: unless-stopped
 
-  # WhatsApp Web Service (Baileys)
   whatsapp-service:
     build:
       context: ./services/whatsapp
       dockerfile: Dockerfile
     container_name: erp-whatsapp
     environment:
-      - ODOO_URL=http://odoo:8069
-      - ODOO_DB=${POSTGRES_DB}
-      - ODOO_USERNAME=${ODOO_ADMIN_USER}
-      - ODOO_PASSWORD=${ODOO_ADMIN_PASSWORD}
-      - REDIS_URL=redis://redis:6379
-      - WA_SESSION_PATH=/app/sessions
+      ODOO_URL: http://odoo:8069
+      ODOO_DB: ${POSTGRES_DB}
+      ODOO_USERNAME: ${ODOO_ADMIN_USER}
+      ODOO_PASSWORD: ${ODOO_ADMIN_PASSWORD}
+      REDIS_URL: redis://redis:6379
+      WA_SESSION_PATH: /app/sessions
     volumes:
       - whatsapp_sessions:/app/sessions
     depends_on:
@@ -83,19 +82,18 @@ services:
       - erp-network
     restart: unless-stopped
 
-  # Telegram Bot Service
   telegram-service:
     build:
       context: ./services/telegram
       dockerfile: Dockerfile
     container_name: erp-telegram
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - ODOO_URL=http://odoo:8069
-      - ODOO_DB=${POSTGRES_DB}
-      - ODOO_USERNAME=${ODOO_ADMIN_USER}
-      - ODOO_PASSWORD=${ODOO_ADMIN_PASSWORD}
-      - REDIS_URL=redis://redis:6379
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      ODOO_URL: http://odoo:8069
+      ODOO_DB: ${POSTGRES_DB}
+      ODOO_USERNAME: ${ODOO_ADMIN_USER}
+      ODOO_PASSWORD: ${ODOO_ADMIN_PASSWORD}
+      REDIS_URL: redis://redis:6379
     depends_on:
       - odoo
       - redis
@@ -103,16 +101,15 @@ services:
       - erp-network
     restart: unless-stopped
 
-  # Celery Worker untuk background tasks
   celery-worker:
     build:
       context: ./services/celery
       dockerfile: Dockerfile
     container_name: erp-celery
     environment:
-      - REDIS_URL=redis://redis:6379
-      - ODOO_URL=http://odoo:8069
-      - ODOO_DB=${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      ODOO_URL: http://odoo:8069
+      ODOO_DB: ${POSTGRES_DB}
     depends_on:
       - redis
       - odoo
