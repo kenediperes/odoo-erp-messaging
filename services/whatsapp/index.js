@@ -4,6 +4,11 @@ const { Boom } = require('@hapi/boom');
 const axios = require('axios');
 const Redis = require('redis');
 const QRCode = require('qrcode-terminal');
+const express = require('express');
+const app = express();
+const port = 3000;
+app.get('/health', (req, res) => res.json({status: 'ok'}));
+app.listen(port, () => console.log(`WhatsApp service running on port ${port}`));
 
 // Configuration
 const ODOO_URL = process.env.ODOO_URL || 'http://odoo:8069';
