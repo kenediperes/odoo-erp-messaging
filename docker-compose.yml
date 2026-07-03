@@ -37,7 +37,7 @@ services:
     environment:
       HOST: db
       USER: odoo_admin
-      PASSWORD: YourStrongPassword123
+      PASSWORD: YourStrongPassword123!
       REDIS_HOST: redis
     volumes:
       - odoo_data:/var/lib/odoo
